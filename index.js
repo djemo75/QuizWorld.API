@@ -23,12 +23,18 @@ app.get('/', (req, res) => {
   })
 })
 
-app.get('/login', (req, res) => {
+app.get('/users', (req, res) => {
   connection.query('SELECT * FROM users', function (err, rows, fields) {
     if (err) throw err
     
     if (rows) {
-      res.send(rows);
+      res.send(rows.map(x => {
+        return {
+          id: x.id,
+          username: x.username,
+          rank: x.rank
+        }
+      }));
     } else {
       res.send([]);
     }
