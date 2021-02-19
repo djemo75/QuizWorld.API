@@ -1,6 +1,6 @@
 const extractSqlError = (error) => {
   return {
-    message: error?.sqlMessage || 'SQL ERROR',
+    message: error?.sqlMessage ? error.sqlMessage : error ? error : 'SQL ERROR',
   };
 };
 

@@ -1,6 +1,6 @@
 const express = require('express');
 const bodyParser = require('body-parser');
-const connection = require('./database/config');
+const { pool } = require('./database/config');
 const apiRoutes = require('./routes/apiRoutes');
 require('dotenv').config();
 
@@ -21,7 +21,7 @@ app.use((req, res, next) => {
 });
 
 // General error handling
-app.use((error, req, res, next) => {
+app.use(function (error, req, res, next) {
   const status = error.statusCode || 500;
   const message = error.message;
   res.status(status).json({ message: message });
@@ -31,5 +31,5 @@ app.use((error, req, res, next) => {
 app.use('/api', apiRoutes);
 
 app.listen(port, () => {
-  console.log(`REST API listening on port:: ${port}`);
+  console.log(`QUIZWORLD API listening on port:: ${port}`);
 });
