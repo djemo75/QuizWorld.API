@@ -7,7 +7,7 @@ class User {
   }
 }
 
-User.getAll = async (params, result) => {
+User.getAll = async (params) => {
   const connection = await mysql.connection();
   const { searchString, pageNumber, pageSize, sortBy, sortDirection } = params;
 
@@ -18,111 +18,71 @@ User.getAll = async (params, result) => {
 
   const sortSql = `ORDER BY ${sortBy} ${sortDirection}`;
 
-  try {
-    const rows = await connection.query(`SELECT id FROM users ${searchSql}`);
-    const totalCount = rows.length;
+  const rows = await connection.query(`SELECT id FROM users ${searchSql}`);
+  const totalCount = rows.length;
 
-    const users = await connection.query(
-      `SELECT id, username, role FROM users ${searchSql} ${sortSql} LIMIT ? OFFSET ?`,
-      [pageSize, pageNumber * pageSize]
-    );
+  const users = await connection.query(
+    `SELECT id, username, role FROM users ${searchSql} ${sortSql} LIMIT ? OFFSET ?`,
+    [pageSize, pageNumber * pageSize]
+  );
 
-    const response = {
-      users,
-      pageNumber: pageNumber + 1,
-      pageSize,
-      totalCount,
-    };
+  const response = {
+    users,
+    pageNumber: pageNumber + 1,
+    pageSize,
+    totalCount,
+  };
 
-    return result(null, response);
-  } catch (err) {
-    return result(err, null);
-  } finally {
-    await connection.release();
-  }
+  await connection.release();
+  return response;
 };
 
-User.getById = async (userId, result) => {
+User.getById = async (userId) => {
   const connection = await mysql.connection();
 
-  try {
-    const usersRows = await connection.query(
-      `SELECT id, username, role, status FROM users WHERE id=?`,
-      [userId]
-    );
+  const usersRows = await connection.query(
+    `SELECT id, username, role, status FROM users WHERE id=?`,
+    [userId]
+  );
 
-    if (!usersRows.length) {
-      return result({ type: 'not_found' }, null);
-    }
-
-    const user = usersRows[0];
-    return result(null, user);
-  } catch (err) {
-    return result(err, null);
-  } finally {
-    await connection.release();
-  }
+  await connection.release();
+  return usersRows.length ? usersRows[0] : null;
 };
 
-User.getByUsername = async (username, result) => {
+User.getByUsername = async (username) => {
   const connection = await mysql.connection();
 
-  try {
-    const usersRows = await connection.query(
-      `SELECT id, username, role, status FROM users WHERE username=?`,
-      [username]
-    );
+  const usersRows = await connection.query(
+    `SELECT * FROM users WHERE username=?`,
+    [username]
+  );
 
-    if (!usersRows.length) {
-      return result({ type: 'not_found' }, null);
-    }
-
-    const user = usersRows[0];
-    return result(null, user);
-  } catch (err) {
-    return result(err, null);
-  } finally {
-    await connection.release();
-  }
+  await connection.release();
+  return usersRows.length ? usersRows[0] : null;
 };
 
-User.getFullInformationByUsername = async (username, result) => {
+User.getFullInformationByUsername = async (username) => {
   const connection = await mysql.connection();
 
-  try {
-    const usersRows = await connection.query(
-      `SELECT * FROM users WHERE username=?`,
-      [username]
-    );
+  const usersRows = await connection.query(
+    `SELECT * FROM users WHERE username=?`,
+    [username]
+  );
 
-    if (!usersRows.length) {
-      return result({ type: 'not_found' }, null);
-    }
-
-    const user = usersRows[0];
-    return result(null, user);
-  } catch (err) {
-    return result(err, null);
-  } finally {
-    await connection.release();
-  }
+  await connection.release();
+  return usersRows.length ? usersRows[0] : null;
 };
 
-User.registerUser = async (newUser, result) => {
+User.registerUser = async (newUser) => {
   const connection = await mysql.connection();
 
-  try {
-    const res = await connection.query(`INSERT INTO users SET ?`, [newUser]);
+  const res = await connection.query(`INSERT INTO users SET ?`, [newUser]);
 
-    return result(null, {
-      message: 'Successfully registered!',
-      id: res.insertId,
-    });
-  } catch (err) {
-    return result(err, null);
-  } finally {
-    await connection.release();
-  }
+  await connection.release();
+  return {
+    message: 'Successfully registered!',
+    id: res.insertId,
+  };
 };
 
 module.exports = User;

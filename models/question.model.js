@@ -1,4 +1,5 @@
 const mysql = require('../database/config');
+const BaseError = require('./baseError.model');
 
 class Question {
   constructor(question) {
@@ -10,78 +11,57 @@ class Question {
   }
 }
 
-Question.getQuestionsByTestId = async (testId, result) => {
+Question.getQuestionsByTestId = async (testId) => {
   const connection = await mysql.connection();
 
-  try {
-    const questions = await connection.query(
-      'SELECT id, testId, question, questionIndex FROM questions WHERE testId=? AND status=1 ORDER BY questionIndex ASC',
-      [testId]
-    );
+  const questions = await connection.query(
+    'SELECT id, testId, question, questionIndex FROM questions WHERE testId=? AND status=1 ORDER BY questionIndex ASC',
+    [testId]
+  );
 
-    const questionsWithOptions = await Promise.all(
-      questions.map(async (question) => {
-        const options = await connection.query(
-          'SELECT * FROM options WHERE questionId=?',
-          [question.id]
-        );
-        return { ...question, options };
-      })
-    );
+  const questionsWithOptions = await Promise.all(
+    questions.map(async (question) => {
+      const options = await connection.query(
+        'SELECT * FROM options WHERE questionId=?',
+        [question.id]
+      );
+      return { ...question, options };
+    })
+  );
 
-    return result(null, questionsWithOptions);
-  } catch (err) {
-    return result(err, null);
-  } finally {
-    await connection.release();
-  }
+  await connection.release();
+  return questionsWithOptions;
 };
 
-Question.getByQuestionId = async (questionId, result) => {
+Question.getByQuestionId = async (questionId) => {
   const connection = await mysql.connection();
 
-  try {
-    const questionRows = await connection.query(
-      'SELECT * FROM questions WHERE id=? AND status=1',
-      [questionId]
-    );
+  const questionRows = await connection.query(
+    'SELECT * FROM questions WHERE id=? AND status=1',
+    [questionId]
+  );
 
-    if (!questionRows.length) {
-      return result({ type: 'not_found' }, null);
-    }
-
-    return result(null, questionRows[0]);
-  } catch (err) {
-    return result(err, null);
-  } finally {
-    await connection.release();
-  }
+  await connection.release();
+  return questionRows.length ? questionRows[0] : null;
 };
 
-Question.insert = async (newQuestion, result) => {
+Question.insert = async (newQuestion) => {
   const connection = await mysql.connection();
   const question = newQuestion;
 
-  try {
-    const lastQuestions = await connection.query(
-      'SELECT questionIndex FROM questions WHERE testId=? AND questionIndex=(SELECT MAX(questionIndex) FROM questions WHERE testId=?)',
-      [question.testId, question.testId]
-    );
+  const lastQuestions = await connection.query(
+    'SELECT questionIndex FROM questions WHERE testId=? AND questionIndex=(SELECT MAX(questionIndex) FROM questions WHERE testId=?)',
+    [question.testId, question.testId]
+  );
 
-    question.questionIndex = lastQuestions.length
-      ? Number(lastQuestions[0].questionIndex) + 1
-      : 1;
+  question.questionIndex = lastQuestions.length
+    ? Number(lastQuestions[0].questionIndex) + 1
+    : 1;
 
-    const res = await connection.query(`INSERT INTO questions SET ?`, [
-      question,
-    ]);
+  const res = await connection.query(`INSERT INTO questions SET ?`, [question]);
 
-    return result(null, { questionId: res.insertId, ...question });
-  } catch (err) {
-    return result(err, null);
-  } finally {
-    await connection.release();
-  }
+  await connection.release();
+  return { questionId: res.insertId, ...question };
 };
 
 Question.edit = async (question, questionId, result) => {

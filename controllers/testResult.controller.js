@@ -1,105 +1,112 @@
 const TestParticipant = require('../models/testParticipant.model');
 const Test = require('../models/test.model');
 const TestResult = require('../models/testResult.model');
+const BaseError = require('../models/baseError.model');
 
-exports.getAllByTestId = (req, res) => {
+exports.getAllByTestId = async (req, res, next) => {
   const { testId } = req.params;
-  const params = {
-    testId,
-    searchString: req.query.searchString.replace(/'/g, "\\'"),
-    pageNumber: req.query.pageNumber ? parseInt(req.query.pageNumber - 1) : 0,
-    pageSize: req.query.pageSize ? parseInt(req.query.pageSize) : 5,
-  };
 
-  TestResult.getAllByTestId(params, (err, data) => {
-    if (err) {
-      if (err.type === 'not_found') {
-        return res.status(404).send({
-          message: `Not found Test with id ${testId}.`,
-        });
-      }
+  try {
+    const params = {
+      testId,
+      searchString: req.query.searchString.replace(/'/g, "\\'"),
+      pageNumber: req.query.pageNumber ? parseInt(req.query.pageNumber - 1) : 0,
+      pageSize: req.query.pageSize ? parseInt(req.query.pageSize) : 5,
+    };
 
-      return res.status(500).send();
+    const test = await Test.getTestDetailsByTestId(testId);
+
+    if (!test) {
+      throw new BaseError(`Not found Test with id ${testId}.`, 404);
     }
-    return res.send(data);
-  });
+
+    const testResults = await TestResult.getAllByTestId(params);
+
+    return res.send(testResults);
+  } catch (error) {
+    next(error);
+  }
 };
 
-exports.getAllMyResults = (req, res) => {
+exports.getAllMyResults = async (req, res, next) => {
   const { userId } = req;
-  const params = {
-    userId,
-    searchString: req.query.searchString.replace(/'/g, "\\'"),
-    pageNumber: req.query.pageNumber ? parseInt(req.query.pageNumber - 1) : 0,
-    pageSize: req.query.pageSize ? parseInt(req.query.pageSize) : 5,
-  };
 
-  TestResult.getAllMyResults(params, (err, data) => {
-    if (err) {
-      return res.status(500).send();
-    }
-    return res.send(data);
-  });
+  try {
+    const params = {
+      userId,
+      searchString: req.query.searchString.replace(/'/g, "\\'"),
+      pageNumber: req.query.pageNumber ? parseInt(req.query.pageNumber - 1) : 0,
+      pageSize: req.query.pageSize ? parseInt(req.query.pageSize) : 5,
+    };
+
+    const testResults = await TestResult.getAllMyResults(params);
+
+    return res.send(testResults);
+  } catch (error) {
+    next(error);
+  }
 };
 
-exports.getOne = (req, res) => {
+exports.getOne = async (req, res, next) => {
   const { testId, resultId } = req.params;
 
-  TestResult.getOne({ testId, resultId }, (err, data) => {
-    if (err) {
-      if (err.type === 'not_found') {
-        return res.status(404).send({
-          message: `Not found Test result.`,
-        });
-      }
+  try {
+    const testResult = await TestResult.getOne(testId, resultId);
 
-      return res.status(500).send();
+    if (!testResult) {
+      throw new BaseError(`Not found Test result.`, 404);
     }
-    return res.send(data);
-  });
+
+    return res.send(testResult);
+  } catch (error) {
+    next(error);
+  }
 };
 
-exports.insert = (req, res) => {
+exports.insert = async (req, res, next) => {
   const filledQuestions = req.body.data;
   const { testId } = req.params;
   const { userId } = req;
 
-  if (
-    !filledQuestions ||
-    typeof filledQuestions !== 'object' ||
-    !testId ||
-    filledQuestions.some(({ id }) => !id)
-  ) {
-    return res.status(400).send('Please provide test id and answers!');
-  }
-
-  const newTestResult = new TestResult({
-    testId,
-    userId,
-    createdAt: new Date(),
-  });
-
-  TestResult.insert(newTestResult, filledQuestions, (err, data) => {
-    if (err) {
-      return res.status(500).send();
+  try {
+    if (
+      !filledQuestions ||
+      typeof filledQuestions !== 'object' ||
+      !testId ||
+      filledQuestions.some(({ id }) => !id)
+    ) {
+      throw new BaseError('Please provide test id and answers!', 400);
     }
-    return res.send(data);
-  });
+
+    const newTestResult = new TestResult({
+      testId,
+      userId,
+      createdAt: new Date(),
+    });
+
+    const insertedTestResult = await TestResult.insert(
+      newTestResult,
+      filledQuestions
+    );
+
+    return res.send(insertedTestResult);
+  } catch (error) {
+    next(error);
+  }
 };
 
-exports.delete = (req, res) => {
+exports.delete = async (req, res, next) => {
   const { testId, resultId } = req.params;
 
-  TestResult.delete({ testId, resultId }, (err, data) => {
-    if (err) {
-      if (err.type === 'not_found') {
-        return res.status(404).send({
-          message: `Not found Test result.`,
-        });
-      }
+  try {
+    const dbResponse = await TestResult.delete(testId, resultId);
 
-      return res.status(500).send();
+    if (dbResponse.affectedRows === 0) {
+      throw new BaseError(`Not found Test result.`, 404);
     }
-    return res.send(data);
-  });
+
+    return res.send({ message: 'Deleted successfully!' });
+  } catch (error) {
+    next(error);
+  }
 };

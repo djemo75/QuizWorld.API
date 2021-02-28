@@ -15,10 +15,7 @@ exports.bulkInsert = (req, res) => {
     return res.status(400).send('Please provide content for option!');
   }
 
-  const optionsArray = [];
-  options.map((option) => {
-    optionsArray.push(new Option(option));
-  });
+  const optionsArray = options.map((option) => new Option(option));
 
   Option.bulkInsert(optionsArray, (err, data) => {
     if (err) {
@@ -43,10 +40,7 @@ exports.bulkEdit = (req, res) => {
     return res.status(400).send('Please provide content for option!');
   }
 
-  const optionsArray = [];
-  options.map((option) => {
-    optionsArray.push(new Option(option));
-  });
+  const optionsArray = options.map((option) => new Option(option));
 
   Option.bulkEdit(optionsArray, (err, data) => {
     if (err) {

@@ -1,74 +1,75 @@
+const BaseError = require('../models/baseError.model');
 const Test = require('../models/test.model');
 
-exports.getAll = (req, res) => {
+exports.getAll = async (req, res, next) => {
   const { testId } = req.params;
   const { userRole, userId } = req;
-  const params = {
-    testId,
-    searchString: req.query.searchString.replace(/'/g, "\\'"),
-    pageNumber: req.query.pageNumber ? parseInt(req.query.pageNumber - 1) : 0,
-    pageSize: req.query.pageSize ? parseInt(req.query.pageSize) : 5,
-    sortBy: req.query.sortBy ? req.query.sortBy : 'createdAt',
-    sortDirection: req.query.sortDirection ? req.query.sortDirection : 'DESC',
-  };
 
-  Test.getAll(params, userId, userRole, (err, data) => {
-    if (err) {
-      return res.status(500).send();
-    }
-    return res.send(data);
-  });
+  try {
+    const params = {
+      testId,
+      searchString: req.query.searchString.replace(/'/g, "\\'"),
+      pageNumber: req.query.pageNumber ? parseInt(req.query.pageNumber - 1) : 0,
+      pageSize: req.query.pageSize ? parseInt(req.query.pageSize) : 5,
+      sortBy: req.query.sortBy ? req.query.sortBy : 'createdAt',
+      sortDirection: req.query.sortDirection ? req.query.sortDirection : 'DESC',
+    };
+
+    const tests = await Test.getAll(params, userId, userRole);
+
+    return res.send(tests);
+  } catch (error) {
+    next(error);
+  }
 };
 
-exports.getOneByTestId = (req, res) => {
+exports.getOneByTestId = async (req, res, next) => {
   const { testId } = req.params;
   const { userId } = req;
 
-  Test.getByTestId({ testId, userId }, (err, data) => {
-    if (err) {
-      if (err.type === 'not_found') {
-        return res.status(404).send({
-          message: `Not found Test with id ${joinCode}.`,
-        });
-      }
+  try {
+    const test = await Test.getByTestId(testId, userId);
 
-      return res.status(500).send();
+    if (!test) {
+      throw new BaseError(`Not found Test with id ${testId}.`, 404);
     }
-    return res.send(data);
-  });
+
+    return res.send(test);
+  } catch (error) {
+    next(error);
+  }
 };
 
-exports.getOneByJoinCode = (req, res) => {
+exports.getOneByJoinCode = async (req, res, next) => {
   const { joinCode } = req.query;
 
-  Test.getByJoinCode(joinCode, (err, data) => {
-    if (err) {
-      if (err.type === 'not_found') {
-        return res.status(404).send({
-          message: `Not found Test with join code ${joinCode}.`,
-        });
-      }
+  try {
+    const test = await Test.getByJoinCode(joinCode);
 
-      return res.status(500).send();
+    if (!test) {
+      throw new BaseError(`Not found Test with join code ${joinCode}.`, 404);
     }
-    return res.send(data);
-  });
+
+    return res.send(test);
+  } catch (error) {
+    next(error);
+  }
 };
 
-exports.insert = async (req, res) => {
+exports.insert = async (req, res, next) => {
   const { userId, name, description, duration, visibility } = req.body;
-  if (!userId || !name || !visibility) {
-    return res.status(400).send('Please provide all required fields!');
-  }
 
-  const joinCode = await Test.generateJoinCode((err, data) => {
-    if (err) {
-      return res.status(500).send();
+  try {
+    if (!userId || !name || !visibility) {
+      throw new BaseError('Please provide all required fields!', 500);
     }
-    return data;
-  });
 
-  if (joinCode) {
+    const joinCode = await Test.generateJoinCode();
+
+    if (!joinCode) {
+      throw new BaseError('Error when generating join code.');
+    }
+
     const newTest = new Test({
       userId,
       name,
@@ -80,73 +81,71 @@ exports.insert = async (req, res) => {
       status: 'unactive',
     });
 
-    Test.insert(newTest, (err, data) => {
-      if (err) {
-        return res.status(500).send();
-      }
-      return res.send(data);
-    });
+    const insertedTest = Test.insert(newTest);
+
+    return res.send(insertedTest);
+  } catch (error) {
+    next(error);
   }
 };
 
-exports.edit = (req, res) => {
+exports.edit = async (req, res, next) => {
   const { testId } = req.params;
   const { name, description, duration, visibility, status } = req.body;
-  if (!name || !visibility || !status) {
-    return res.status(400).send('Please provide all required fields!');
+
+  try {
+    if (!name || !visibility || !status) {
+      throw new BaseError('Please provide all required fields!', 400);
+    }
+
+    const test = new Test({
+      name,
+      description,
+      duration,
+      visibility,
+      status,
+    });
+
+    const dbResponse = await Test.edit(test, testId);
+
+    if (dbResponse.affectedRows === 0) {
+      throw new BaseError(`Not found Test with id ${testId}.`, 404);
+    }
+
+    return res.send({ message: 'Edited successfully!' });
+  } catch (error) {
+    next(error);
   }
-
-  const test = new Test({
-    name,
-    description,
-    duration,
-    visibility,
-    status,
-  });
-
-  Test.edit(test, testId, (err, data) => {
-    if (err) {
-      if (err.type === 'not_found') {
-        return res.status(404).send({
-          message: `Not found Test with id ${testId}.`,
-        });
-      }
-      return res.status(500).send();
-    }
-    return res.send(data);
-  });
 };
 
-exports.delete = (req, res) => {
+exports.delete = async (req, res, next) => {
   const { testId } = req.params;
 
-  Test.delete(testId, (err, data) => {
-    if (err) {
-      if (err.type === 'not_found') {
-        return res.status(404).send({
-          message: `Not found Test with id ${testId}.`,
-        });
-      }
+  try {
+    const dbResponse = await Test.delete(testId);
 
-      return res.status(500).send();
+    if (dbResponse.affectedRows === 0) {
+      throw new BaseError(`Not found Test with id ${testId}.`, 404);
     }
-    return res.send(data);
-  });
+
+    return res.send({ message: 'Deleted successfully!' });
+  } catch (error) {
+    next(error);
+  }
 };
 
-exports.getStatistic = (req, res) => {
+exports.getStatistic = async (req, res, next) => {
   const { testId } = req.params;
 
-  Test.getStatistic(testId, (err, data) => {
-    if (err) {
-      if (err.type === 'not_found') {
-        return res.status(404).send({
-          message: `Not found Test with id ${testId}.`,
-        });
-      }
+  try {
+    const statistic = await Test.getStatistic(testId);
 
-      return res.status(500).send();
+    if (!statistic) {
+      throw new BaseError(`Not found Test with id ${testId}.`, 404);
     }
-    return res.send(data);
-  });
+
+    return res.send(statistic);
+  } catch (error) {
+    next(error);
+  }
 };

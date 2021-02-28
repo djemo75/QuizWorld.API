@@ -3,7 +3,7 @@ const util = require('util');
 require('dotenv').config();
 
 const dbConfig = {
-  connectionLimit: 500,
+  connectionLimit: 9,
   host: process.env.DATABASE_HOST,
   user: process.env.DATABASE_USERNAME,
   password: process.env.DATABASE_PASSWORD,
@@ -11,8 +11,6 @@ const dbConfig = {
   multipleStatements: true,
 };
 const pool = mysql.createPool(dbConfig);
-
-// const connection = util.promisify(pool.query).bind(pool);
 
 const connection = () => {
   return new Promise((resolve, reject) => {
@@ -52,4 +50,4 @@ const query = (sql, binding) => {
   });
 };
 
-module.exports = { connection, pool };
+module.exports = { connection, query, pool };

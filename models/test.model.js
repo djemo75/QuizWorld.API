@@ -14,7 +14,7 @@ class Test {
   }
 }
 
-Test.getAll = async (params, userId, userRole, result) => {
+Test.getAll = async (params, userId, userRole) => {
   const connection = await mysql.connection();
   const { searchString, pageNumber, pageSize, sortBy, sortDirection } = params;
 
@@ -30,218 +30,172 @@ Test.getAll = async (params, userId, userRole, result) => {
 
   const sortingSql = `ORDER BY ${sortBy} ${sortDirection}`;
 
-  try {
-    const rows = await connection.query(`SELECT id FROM tests ${searchSql}`);
-    const totalCount = rows.length;
+  const rows = await connection.query(`SELECT id FROM tests ${searchSql}`);
+  const totalCount = rows.length;
 
-    const tests = await connection.query(
-      `SELECT id, name, visibility, duration, createdAt, status
+  const tests = await connection.query(
+    `SELECT id, name, visibility, duration, createdAt, status
        FROM tests ${searchSql} ${sortingSql} LIMIT ? OFFSET ?`,
-      [pageSize, pageNumber * pageSize]
-    );
+    [pageSize, pageNumber * pageSize]
+  );
 
-    const response = {
-      tests,
-      pageNumber: pageNumber + 1,
-      pageSize,
-      totalCount,
-    };
+  const response = {
+    tests,
+    pageNumber: pageNumber + 1,
+    pageSize,
+    totalCount,
+  };
 
-    return result(null, response);
-  } catch (err) {
-    return result(err, null);
-  } finally {
-    await connection.release();
-  }
+  await connection.release();
+  return response;
 };
 
-Test.getByTestId = async ({ testId, userId }, result) => {
+Test.getByTestId = async (testId, userId) => {
   const connection = await mysql.connection();
 
-  try {
-    const testRows = await connection.query(
-      `SELECT tests.*, users.username FROM tests LEFT JOIN users ON tests.userId=users.id WHERE tests.id=?`,
-      [testId]
+  const testRows = await connection.query(
+    `SELECT tests.*, users.username FROM tests LEFT JOIN users ON tests.userId=users.id WHERE tests.id=?`,
+    [testId]
+  );
+
+  if (!testRows.length) {
+    return null;
+  }
+
+  const test = testRows[0];
+
+  let accessForSolving = true;
+  if (test.visibility === 'private') {
+    const participants = await connection.query(
+      'SELECT * FROM test_participants WHERE testId=? AND userId=?',
+      [testId, userId]
     );
 
-    if (!testRows.length) {
-      return result({ type: 'not_found' }, null);
+    if (!participants.length) {
+      accessForSolving = false;
     }
-
-    const test = testRows[0];
-
-    let accessForSolving = true;
-    if (test.visibility === 'private') {
-      const participants = await connection.query(
-        'SELECT * FROM test_participants WHERE testId=? AND userId=?',
-        [testId, userId]
-      );
-
-      if (!participants.length) {
-        accessForSolving = false;
-      }
-    }
-
-    test.user = { id: test.userId, username: test.username };
-    test.accessForSolving = accessForSolving;
-
-    return result(null, test);
-  } catch (err) {
-    return result(err, null);
-  } finally {
-    await connection.release();
   }
+
+  test.user = { id: test.userId, username: test.username };
+  test.accessForSolving = accessForSolving;
+
+  await connection.release();
+  return test;
 };
 
-Test.getByJoinCode = async (joinCode, result) => {
+Test.getTestDetailsByTestId = async (testId) => {
   const connection = await mysql.connection();
 
-  try {
-    const testsRows = await connection.query(
-      `SELECT id FROM tests WHERE joinCode=?`,
+  const testRows = await connection.query(`SELECT * FROM tests  WHERE id=?`, [
+    testId,
+  ]);
+
+  await connection.release();
+  return testRows.length ? testRows[0] : null;
+};
+
+Test.getByJoinCode = async (joinCode) => {
+  const connection = await mysql.connection();
+
+  const testsRows = await connection.query(
+    `SELECT id FROM tests WHERE joinCode=?`,
+    [joinCode]
+  );
+
+  await connection.release();
+  return testsRows.length ? testsRows[0] : null;
+};
+
+Test.insert = async (newTest) => {
+  const connection = await mysql.connection();
+
+  const res = await connection.query(`INSERT INTO tests SET ?`, [newTest]);
+
+  await connection.release();
+  return { id: res.insertId, ...newTest };
+};
+
+Test.edit = async (test, testId) => {
+  const connection = await mysql.connection();
+
+  const res = await connection.query(
+    `UPDATE tests SET name=?, description=?, duration=?, visibility=?, status=? WHERE id=?`,
+    [
+      test.name,
+      test.description,
+      test.duration,
+      test.visibility,
+      test.status,
+      testId,
+    ]
+  );
+
+  await connection.release();
+  return res;
+};
+
+Test.delete = async (testId) => {
+  const connection = await mysql.connection();
+
+  const res = await connection.query(`DELETE FROM tests WHERE id=?`, [testId]);
+
+  await connection.release();
+  return res;
+};
+
+Test.generateJoinCode = async () => {
+  const connection = await mysql.connection();
+
+  let joinCode;
+  while (true) {
+    joinCode = generateJoinCode();
+    const rows = await connection.query(
+      `SELECT * FROM tests WHERE joinCode=?`,
       [joinCode]
     );
-
-    if (!testsRows.length) {
-      return result({ type: 'not_found' }, null);
+    if (!rows.length) {
+      break;
     }
-
-    const test = testsRows[0];
-    return result(null, test);
-  } catch (err) {
-    return result(err, null);
-  } finally {
-    await connection.release();
   }
+
+  await connection.release();
+  return joinCode;
 };
 
-Test.insert = async (newTest, result) => {
+Test.getStatistic = async (testId) => {
   const connection = await mysql.connection();
 
-  try {
-    const res = await connection.query(`INSERT INTO tests SET ?`, [newTest]);
+  const testsRows = await connection.query(`SELECT * FROM tests WHERE id=?`, [
+    testId,
+  ]);
 
-    return result(null, { id: res.insertId, ...newTest });
-  } catch (err) {
-    return result(err, null);
-  } finally {
-    await connection.release();
+  if (!testsRows.length) {
+    return null;
   }
-};
 
-Test.edit = async (test, testId, result) => {
-  const connection = await mysql.connection();
+  const questionsRows = await connection.query(
+    `SELECT * FROM questions WHERE testId=? AND status=1`,
+    [testId]
+  );
 
-  try {
-    const res = await connection.query(
-      `UPDATE tests SET name=?, description=?, duration=?, visibility=?, status=? WHERE id=?`,
-      [
-        test.name,
-        test.description,
-        test.duration,
-        test.visibility,
-        test.status,
-        testId,
-      ]
-    );
+  const participantsRows = await connection.query(
+    `SELECT * FROM test_participants WHERE testId=?`,
+    [testId]
+  );
 
-    if (res.affectedRows === 0) {
-      return result({ type: 'not_found' }, null);
-    }
+  const resultsRows = await connection.query(
+    `SELECT * FROM test_results WHERE testId=?`,
+    [testId]
+  );
 
-    return result(null, { message: 'Edited successfully!' });
-  } catch (err) {
-    return result(err, null);
-  } finally {
-    await connection.release();
-  }
-};
+  const statistic = {
+    totalQuestions: questionsRows.length,
+    totalParticipants: participantsRows.length,
+    totalResults: resultsRows.length,
+  };
 
-Test.delete = async (testId, result) => {
-  const connection = await mysql.connection();
-
-  try {
-    const res = await connection.query(`DELETE FROM tests WHERE id=?`, [
-      testId,
-    ]);
-
-    if (res.affectedRows === 0) {
-      return result({ type: 'not_found' }, null);
-    }
-
-    return result(null, {
-      message: 'Deleted successfully!',
-    });
-  } catch (err) {
-    return result(err, null);
-  } finally {
-    await connection.release();
-  }
-};
-
-Test.generateJoinCode = async (result) => {
-  const connection = await mysql.connection();
-
-  try {
-    let joinCode;
-    while (true) {
-      joinCode = generateJoinCode();
-      const rows = await connection.query(
-        `SELECT * FROM tests WHERE joinCode=?`,
-        [joinCode]
-      );
-      if (!rows.length) {
-        break;
-      }
-    }
-
-    return result(null, joinCode);
-  } catch (err) {
-    return result(err, null);
-  } finally {
-    await connection.release();
-  }
-};
-
-Test.getStatistic = async (testId, result) => {
-  const connection = await mysql.connection();
-
-  try {
-    const testsRows = await connection.query(`SELECT * FROM tests WHERE id=?`, [
-      testId,
-    ]);
-
-    if (!testsRows.length) {
-      return result({ type: 'not_found' }, null);
-    }
-
-    const questionsRows = await connection.query(
-      `SELECT * FROM questions WHERE testId=? AND status=1`,
-      [testId]
-    );
-
-    const participantsRows = await connection.query(
-      `SELECT * FROM test_participants WHERE testId=?`,
-      [testId]
-    );
-
-    const resultsRows = await connection.query(
-      `SELECT * FROM test_results WHERE testId=?`,
-      [testId]
-    );
-
-    const statistic = {
-      totalQuestions: questionsRows.length,
-      totalParticipants: participantsRows.length,
-      totalResults: resultsRows.length,
-    };
-
-    return result(null, statistic);
-  } catch (err) {
-    return result(err, null);
-  } finally {
-    await connection.release();
-  }
+  await connection.release();
+  return statistic;
 };
 
 // Questions

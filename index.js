@@ -20,14 +20,6 @@ app.use((req, res, next) => {
   next();
 });
 
-// General error handling
-app.use(function (error, req, res, next) {
-  const status = error.statusCode || 500;
-  const message = error.message;
-  res.status(status).json({ message: message });
-  next();
-});
-
 app.use('/api', apiRoutes);
 
 app.listen(port, () => {

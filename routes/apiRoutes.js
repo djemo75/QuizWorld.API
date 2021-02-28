@@ -13,4 +13,11 @@ router.use('/questions', questionRoutes);
 router.use('/options', optionRoutes);
 router.use('/testResults', testResultsRoutes);
 
+// General error handling
+router.use(function (error, req, res, next) {
+  const status = error.statusCode || 500;
+  const message = error.message;
+  return res.status(status).json({ message: message });
+});
+
 module.exports = router;

@@ -8,7 +8,7 @@ class TestParticipant {
   }
 }
 
-TestParticipant.getAllByTestId = async (params, result) => {
+TestParticipant.getAllByTestId = async (params) => {
   const connection = await mysql.connection();
   const {
     testId,
@@ -26,106 +26,67 @@ TestParticipant.getAllByTestId = async (params, result) => {
 
   const sortingSql = `ORDER BY ${sortBy} ${sortDirection}`;
 
-  try {
-    const testsRows = await connection.query(
-      `SELECT id FROM tests WHERE id=?`,
-      [testId]
-    );
-
-    if (!testsRows.length) {
-      return result({ type: 'not_found' }, null);
-    }
-
-    const rows = await connection.query(
-      `SELECT test_participants.id FROM test_participants
+  const rows = await connection.query(
+    `SELECT test_participants.id FROM test_participants
        INNER JOIN users ON test_participants.userId=users.id
        WHERE test_participants.testId=? ${searchSql && `AND ${searchSql}`}`,
-      [testId]
-    );
-    const totalCount = rows.length;
+    [testId]
+  );
+  const totalCount = rows.length;
 
-    const participantsRows = await connection.query(
-      `SELECT test_participants.*, users.username FROM test_participants
+  const participantsRows = await connection.query(
+    `SELECT test_participants.*, users.username FROM test_participants
        INNER JOIN users ON test_participants.userId=users.id
        WHERE test_participants.testId=? ${
          searchSql && `AND ${searchSql}`
        } ${sortingSql} LIMIT ? OFFSET ?`,
-      [testId, pageSize, pageNumber * pageSize]
-    );
+    [testId, pageSize, pageNumber * pageSize]
+  );
 
-    const response = {
-      participants: participantsRows,
-      pageNumber: pageNumber + 1,
-      pageSize,
-      totalCount,
-    };
+  const response = {
+    participants: participantsRows,
+    pageNumber: pageNumber + 1,
+    pageSize,
+    totalCount,
+  };
 
-    return result(null, response);
-  } catch (err) {
-    return result(err, null);
-  } finally {
-    await connection.release();
-  }
+  await connection.release();
+  return response;
 };
 
-TestParticipant.getByUserIdAndTestId = async ({ testId, userId }, result) => {
+TestParticipant.getByUserIdAndTestId = async (testId, userId) => {
   const connection = await mysql.connection();
 
-  try {
-    const participantsRows = await connection.query(
-      `SELECT * FROM test_participants WHERE testId=? AND userId=?`,
-      [testId, userId]
-    );
+  const participantsRows = await connection.query(
+    `SELECT * FROM test_participants WHERE testId=? AND userId=?`,
+    [testId, userId]
+  );
 
-    if (!participantsRows.length) {
-      return result(null, null);
-    }
-
-    return result(null, participantsRows[0]);
-  } catch (err) {
-    return result(err, null);
-  } finally {
-    await connection.release();
-  }
+  await connection.release();
+  return participantsRows.length ? participantsRows[0] : null;
 };
 
-TestParticipant.insert = async (newParticipant, result) => {
+TestParticipant.insert = async (newParticipant) => {
   const connection = await mysql.connection();
 
-  try {
-    const res = await connection.query(`INSERT INTO test_participants SET ?`, [
-      newParticipant,
-    ]);
+  const res = await connection.query(`INSERT INTO test_participants SET ?`, [
+    newParticipant,
+  ]);
 
-    return result(null, { id: res.insertId, ...newParticipant });
-  } catch (err) {
-    return result(err, null);
-  } finally {
-    await connection.release();
-  }
+  await connection.release();
+  return { id: res.insertId, ...newParticipant };
 };
 
-TestParticipant.delete = async (participantId, result) => {
+TestParticipant.delete = async (participantId) => {
   const connection = await mysql.connection();
 
-  try {
-    const res = await connection.query(
-      `DELETE FROM test_participants WHERE id=?`,
-      [participantId]
-    );
+  const res = await connection.query(
+    `DELETE FROM test_participants WHERE id=?`,
+    [participantId]
+  );
 
-    if (res.affectedRows === 0) {
-      return result({ type: 'not_found' }, null);
-    }
-
-    return result(null, {
-      message: 'The participant has been removed successfully!',
-    });
-  } catch (err) {
-    return result(err, null);
-  } finally {
-    await connection.release();
-  }
+  await connection.release();
+  return res;
 };
 
 module.exports = TestParticipant;

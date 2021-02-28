@@ -1,68 +1,59 @@
 const TestParticipant = require('../models/testParticipant.model');
 const User = require('../models/user.model');
+const BaseError = require('../models/baseError.model');
+const Test = require('../models/test.model');
 
-exports.getAll = (req, res) => {
+exports.getAll = async (req, res, next) => {
   const { testId } = req.params;
-  const params = {
-    testId,
-    searchString: req.query.searchString.replace(/'/g, "\\'"),
-    pageNumber: req.query.pageNumber ? parseInt(req.query.pageNumber - 1) : 0,
-    pageSize: req.query.pageSize ? parseInt(req.query.pageSize) : 5,
-    sortBy: req.query.sortBy ? req.query.sortBy : 'createdAt',
-    sortDirection: req.query.sortDirection ? req.query.sortDirection : 'DESC',
-  };
 
-  TestParticipant.getAllByTestId(params, (err, data) => {
-    if (err) {
-      if (err.type === 'not_found') {
-        return res.status(404).send({
-          message: `Not found Test with id ${testId}.`,
-        });
-      }
+  try {
+    const params = {
+      testId,
+      searchString: req.query.searchString.replace(/'/g, "\\'"),
+      pageNumber: req.query.pageNumber ? parseInt(req.query.pageNumber - 1) : 0,
+      pageSize: req.query.pageSize ? parseInt(req.query.pageSize) : 5,
+      sortBy: req.query.sortBy ? req.query.sortBy : 'createdAt',
+      sortDirection: req.query.sortDirection ? req.query.sortDirection : 'DESC',
+    };
 
-      return res.status(500).send();
+    const test = await Test.getTestDetailsByTestId(testId);
+
+    if (!test) {
+      throw new BaseError(`Not found Test with id ${testId}.`, 404);
     }
-    return res.send(data);
-  });
+
+    const participants = await TestParticipant.getAllByTestId(params);
+
+    return res.send(participants);
+  } catch (error) {
+    next(error);
+  }
 };
 
-exports.insert = async (req, res) => {
+exports.insert = async (req, res, next) => {
   const { testId } = req.params;
   const { username } = req.body;
 
-  if (!username) {
-    return res.status(400).send({
-      message: 'Please provide user for adding',
-    });
-  }
-
-  const user = await User.getByUsername(username, (err, data) => {
-    if (err) {
-      if (err.type === 'not_found') {
-        return res.status(404).send({ message: 'Username does not exist' });
-      }
-
-      return res.status(500).send();
+  try {
+    if (!username) {
+      throw new BaseError('Please provide user for adding', 400);
     }
-    return data;
-  });
 
-  if (user) {
+    const user = await User.getByUsername(username);
+    if (!user) {
+      throw new BaseError('Username does not exist', 404);
+    }
+
     const userId = user.id;
     const participant = await TestParticipant.getByUserIdAndTestId(
-      { userId, testId },
-      (err, data) => {
-        if (err) {
-          return res.status(500).send();
-        }
-        return data;
-      }
+      testId,
+      userId
     );
-
     if (participant) {
-      return res.status(400).send({
-        message: 'The user is already participating in this test',
-      });
+      throw new BaseError(
+        'The user is already participating in this test',
+        400
+      );
     }
 
     const newParticipant = new TestParticipant({
@@ -71,28 +62,30 @@ exports.insert = async (req, res) => {
       createdAt: new Date(),
     });
 
-    TestParticipant.insert(newParticipant, (err, data) => {
-      if (err) {
-        return res.status(500).send();
-      }
-      return res.send(data);
-    });
+    const data = await TestParticipant.insert(newParticipant);
+    return res.send(data);
+  } catch (error) {
+    next(error);
   }
 };
 
-exports.delete = (req, res) => {
+exports.delete = async (req, res, next) => {
   const { participantId } = req.params;
 
-  TestParticipant.delete(participantId, (err, data) => {
-    if (err) {
-      if (err.type === 'not_found') {
-        return res.status(404).send({
-          message: `Not found Participant with id ${participantId}.`,
-        });
-      }
+  try {
+    const dbResponse = await TestParticipant.delete(participantId);
 
-      return res.status(500).send();
+    if (dbResponse.affectedRows === 0) {
+      throw new BaseError(
+        `Not found Participant with id ${participantId}.`,
+        404
+      );
     }
-    return res.send(data);
-  });
+
+    return res.send({
+      message: 'The participant has been removed successfully!',
+    });
+  } catch (error) {
+    next(error);
+  }
 };

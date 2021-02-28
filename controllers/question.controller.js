@@ -1,144 +1,118 @@
 const Test = require('../models/test.model');
 const Question = require('../models/question.model');
 const TestParticipant = require('../models/testParticipant.model');
-const { options } = require('../routes/userRoutes');
+const BaseError = require('../models/baseError.model');
 
-exports.getQuestionsWithOptions = async (req, res) => {
+exports.getQuestionsWithOptions = async (req, res, next) => {
   const { testId } = req.params;
   const { userId } = req;
 
-  const currentTest = await Test.getByTestId(
-    { testId, userId },
-    (err, data) => {
-      if (err) {
-        if (err.type === 'not_found') {
-          return res.status(404).send({
-            message: `Not found Test with id ${testId}.`,
-          });
-        }
+  try {
+    const currentTest = await Test.getByTestId(testId, userId);
 
-        return res.status(500).send();
-      }
-      return data;
+    if (!currentTest) {
+      throw new BaseError(`Not found Test with id ${testId}.`, 404);
     }
-  );
 
-  if (currentTest) {
     if (currentTest.visibility === 'private') {
       const participant = await TestParticipant.getByUserIdAndTestId(
-        { userId, testId },
-        (err, data) => {
-          if (err) {
-            return res.status(500).send();
-          }
-          return data;
-        }
+        testId,
+        userId
       );
 
       if (!participant) {
-        return res
-          .status(400)
-          .send('You are not included in the list of participants!');
+        throw new BaseError(
+          'You are not included in the list of participants!',
+          400
+        );
       }
     }
 
-    await Question.getQuestionsByTestId(testId, (err, data) => {
-      if (err) {
-        return res.status(500).send();
-      }
+    const questions = await Question.getQuestionsByTestId(testId);
 
-      const response = data.map((question) => ({
-        ...question,
-        options: question.options.map((option) => {
-          const newOption = option;
-          delete newOption.isRight;
-          return newOption;
-        }),
-      }));
+    const response = questions.map((question) => ({
+      ...question,
+      options: question.options.map((option) => {
+        const newOption = option;
+        delete newOption.isRight;
+        return newOption;
+      }),
+    }));
 
-      return res.send(response);
-    });
+    return res.send(response);
+  } catch (error) {
+    next(error);
   }
 };
 
-exports.getQuestionsWithOptionsWithAnswers = async (req, res) => {
+exports.getQuestionsWithOptionsWithAnswers = async (req, res, next) => {
   const { testId } = req.params;
   const { userId } = req;
 
-  const currentTest = await Test.getByTestId(
-    { testId, userId },
-    (err, data) => {
-      if (err) {
-        if (err.type === 'not_found') {
-          return res.status(404).send({
-            message: `Not found Test with id ${joinCode}.`,
-          });
-        }
+  try {
+    const currentTest = await Test.getByTestId(testId, userId);
 
-        return res.status(500).send();
-      }
-      return data;
+    if (!currentTest) {
+      throw new BaseError(`Not found Test with id ${testId}.`, 404);
     }
-  );
 
-  if (currentTest) {
-    await Question.getQuestionsByTestId(testId, (err, data) => {
-      if (err) {
-        return res.status(500).send();
-      }
-      const response = data.map((question) => ({
-        ...question,
-        options: question.options.map((option) => ({
-          ...option,
-          isRight: Boolean(option.isRight),
-        })),
-      }));
-      return res.send(response);
-    });
+    const questions = await Question.getQuestionsByTestId(testId);
+
+    const response = questions.map((question) => ({
+      ...question,
+      options: question.options.map((option) => ({
+        ...option,
+        isRight: Boolean(option.isRight),
+      })),
+    }));
+
+    return res.send(response);
+  } catch (error) {
+    next(error);
   }
 };
 
-exports.getOneByQuestionId = (req, res) => {
+exports.getOneByQuestionId = async (req, res, next) => {
   const { questionId } = req.params;
 
-  Question.getByQuestionId(questionId, (err, data) => {
-    if (err) {
-      if (err.type === 'not_found') {
-        return res.status(404).send({
-          message: `Not found Question with id ${questionId}.`,
-        });
-      }
+  try {
+    const question = await Question.getByQuestionId(questionId);
 
-      return res.status(500).send();
+    if (!question) {
+      throw new BaseError(`Not found Question with id ${questionId}.`, 404);
     }
-    return res.send(data);
-  });
+
+    return res.send(question);
+  } catch (error) {
+    next(error);
+  }
 };
 
 exports.insert = async (req, res) => {
   const { testId, question, image } = req.body;
 
-  if (!testId) {
-    return res.status(400).send('Please provide test id for question!');
-  }
-
-  if (!question) {
-    return res.status(400).send('Please provide content for question!');
-  }
-
-  const newQuestion = new Question({
-    testId,
-    question,
-    image,
-    status: 1,
-  });
-
-  Question.insert(newQuestion, (err, data) => {
-    if (err) {
-      return res.status(500).send();
+  try {
+    if (!testId) {
+      throw new BaseError('Please provide test id for question!', 400);
     }
-    return res.send(data);
-  });
+
+    if (!question) {
+      throw new BaseError('Please provide content for question!', 400);
+    }
+
+    const newQuestion = new Question({
+      testId,
+      question,
+      image,
+      status: 1,
+    });
+
+    const insertedQuestion = await Question.insert(newQuestion);
+
+    return res.send(insertedQuestion);
+  } catch (error) {
+    next(error);
+  }
 };
 
 exports.edit = (req, res) => {
