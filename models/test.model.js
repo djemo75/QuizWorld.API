@@ -34,7 +34,7 @@ Test.getAll = async (params, userId, userRole) => {
   const totalCount = rows.length;
 
   const tests = await connection.query(
-    `SELECT id, name, visibility, duration, createdAt, status
+    `SELECT id, name, visibility, duration, createdAt, status, userId
        FROM tests ${searchSql} ${sortingSql} LIMIT ? OFFSET ?`,
     [pageSize, pageNumber * pageSize]
   );

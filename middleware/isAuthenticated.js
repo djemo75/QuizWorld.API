@@ -8,23 +8,14 @@ const isAuthenticated = (req, res, next) => {
 
   const token = req.get('Authorization').split(' ')[1];
 
-  try {
-    decodedToken = jwt.verify(
-      token,
-      process.env.SECRET_KEY,
-      (err, accessRes) => {
-        if (err) {
-          throw err;
-        }
-
-        req.userId = accessRes.id;
-        req.userRole = accessRes.role;
-        next();
-      }
-    );
-  } catch (error) {
-    res.status(401).json({ message: 'Token is invalid.', error });
+  const tokenData = jwt.decode(token);
+  if (!tokenData) {
+    return res.status(401).json({ message: 'Token is invalid.', error });
   }
+
+  req.userId = tokenData.id;
+  req.userRole = tokenData.role;
+  next();
 };
 
 module.exports = isAuthenticated;

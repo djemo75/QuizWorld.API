@@ -74,7 +74,7 @@ exports.insert = async (req, res, next) => {
       userId,
       name,
       description,
-      duration,
+      duration: duration ? Number(duration) : 0,
       visibility,
       createdAt: new Date(),
       joinCode,
@@ -101,7 +101,7 @@ exports.edit = async (req, res, next) => {
     const test = new Test({
       name,
       description,
-      duration,
+      duration: duration ? Number(duration) : 0,
       visibility,
       status,
     });
